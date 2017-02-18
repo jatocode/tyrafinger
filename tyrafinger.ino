@@ -1,6 +1,7 @@
 
 #include <Adafruit_Fingerprint.h>
 #include <SoftwareSerial.h>
+#include <EEPROM.h>
 
 /*
  * Tobias 7/2 -2017
@@ -14,6 +15,10 @@ const int greenPin = 5;
 const int yellowPin = 6;
 const int whitePin = 7;
 const int knappPin = 10;
+const int HOLDTIME = 5000;
+const int CHECK_MODE = 0;
+const int ENROLL_MODE = 1;
+const int EEPROM_ADDRESS = 0;
 
 int getFingerprintIDez();
 
@@ -25,8 +30,8 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 uint8_t id;
 uint8_t getFingerprintEnroll();
 
-int knapp = 0;
 unsigned long buttonTime = 0;
+int mode = CHECK_MODE;
 
 void setup()  
 {
@@ -51,6 +56,19 @@ void setup()
     Serial.println("Did not find fingerprint sensor :(");
     while (1);
   }
+  int knapp = digitalRead(knappPin);
+  if(knapp == LOW) {
+    Serial.println("Knapp under uppstart. Töm DB");
+    finger.emptyDatabase();
+    id = 0;
+    EEPROM.put(EEPROM_ADDRESS, id);
+  }
+
+  EEPROM.get(EEPROM_ADDRESS, id);
+
+  Serial.print("Last ID used: ");
+  Serial.println(id);
+  
   Serial.println("Waiting for valid finger...");
   
   digitalWrite(whitePin, HIGH);
@@ -58,10 +76,27 @@ void setup()
 
 void loop()                     // run over and over again
 {
-  getFingerprintID();
-  digitalWrite(yellowPin, LOW);
-  digitalWrite(greenPin, LOW);
-  digitalWrite(redPin, LOW);
+  if(mode == ENROLL_MODE) {
+    id = id + 1;
+    int enroll;
+    enroll = getFingerprintEnroll();   
+    digitalWrite(yellowPin, LOW);
+    digitalWrite(greenPin, LOW);
+    digitalWrite(redPin, LOW);
+    mode = CHECK_MODE;   
+    Serial.println(enroll);
+    if(enroll >= 0) {
+      Serial.print("Storing new fingerprint as id:");
+      Serial.println(id);
+      EEPROM.put(EEPROM_ADDRESS, id);
+    }
+  } else {
+    getFingerprintID();
+    digitalWrite(yellowPin, LOW);
+    digitalWrite(greenPin, LOW);
+    digitalWrite(redPin, LOW);
+    holdButton();
+  }
   delay(50);            //don't ned to run this at full speed.
 }
 
@@ -69,8 +104,7 @@ uint8_t getFingerprintID() {
   uint8_t p = finger.getImage();
   //Serial.println("Getting image");
   switch (p) {
-    case FINGERPRINT_OK:
-      
+    case FINGERPRINT_OK:    
       Serial.println("Image taken");
       break;
     case FINGERPRINT_NOFINGER:
@@ -320,16 +354,19 @@ uint8_t getFingerprintEnroll() {
 }
 
 void holdButton() {
+  int knapp;
   knapp = digitalRead(knappPin);
   if(knapp == LOW) {
-    Serial.println("Button pressed");
     unsigned long now = millis();
     if(buttonTime == 0) {
       buttonTime = now;
-    }    
-    if(now - buttonTime > 5000) {
-      Serial.println("Time has passed!");
-      digitalWrite(whitePin, LOW);
+    }
+    if(now - buttonTime > HOLDTIME) {
+      digitalWrite(redPin, HIGH);
+      digitalWrite(greenPin, HIGH);
+      digitalWrite(yellowPin, HIGH);
+      digitalWrite(whitePin, HIGH);
+      mode = ENROLL_MODE;
     }
   } else {
     digitalWrite(whitePin, HIGH);
