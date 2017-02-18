@@ -357,6 +357,7 @@ void holdButton() {
   int knapp;
   knapp = digitalRead(knappPin);
   if(knapp == LOW) {
+    digitalWrite(whitePin, LOW);   
     unsigned long now = millis();
     if(buttonTime == 0) {
       buttonTime = now;
